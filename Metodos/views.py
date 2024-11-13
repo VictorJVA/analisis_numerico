@@ -1151,6 +1151,102 @@ def interpolacion(request):
                 dataframe_to_txt(coef_df, 'Spline_coef')
                 dataframe_to_txt(func_df, 'Spline_func')
                 plot_to_png(fig, f'Spline_Lineal_graph')
+
+            elif metodo_interpolacion == 'cuadratic_spline':
+                try:
+                    xi = x_floats
+                    fi = y_floats
+
+                    X = np.array(x_floats)
+                    Y = np.array(y_floats)
+                    n = len(X)
+
+                    # Crear el sistema de ecuaciones para el spline cuadrático
+                    A = np.zeros((3 * (n - 1), 3 * (n - 1)))
+                    b = np.zeros(3 * (n - 1))
+                    row = 0
+
+                    # Condiciones de paso por los puntos
+                    for i in range(n - 1):
+                        A[row, 3 * i] = X[i] ** 2
+                        A[row, 3 * i + 1] = X[i]
+                        A[row, 3 * i + 2] = 1
+                        b[row] = Y[i]
+                        row += 1
+
+                        A[row, 3 * i] = X[i + 1] ** 2
+                        A[row, 3 * i + 1] = X[i + 1]
+                        A[row, 3 * i + 2] = 1
+                        b[row] = Y[i + 1]
+                        row += 1
+
+                    # Condiciones de continuidad de la primera derivada
+                    for i in range(1, n - 1):
+                        A[row, 3 * (i - 1)] = 2 * X[i]
+                        A[row, 3 * (i - 1) + 1] = 1
+                        A[row, 3 * i] = -2 * X[i]
+                        A[row, 3 * i + 1] = -1
+                        b[row] = 0
+                        row += 1
+
+                    # Resolver el sistema de ecuaciones
+                    coeficientes = np.linalg.solve(A, b)
+                    coef_list = coeficientes.reshape((n - 1, 3))
+
+                    # Crear las funciones cuadráticas por tramos
+                    x = sp.Symbol('x')
+                    spline_funcs = []
+                    for i in range(n - 1):
+                        a, b, c = coef_list[i]
+                        spline_func = a * x**2 + b * x + c
+                        spline_funcs.append(spline_func)
+
+                    # Crear DataFrame para los coeficientes
+                    coef_df = pd.DataFrame(coef_list, columns=['a', 'b', 'c'])
+                    coef_df_to_html = coef_df.to_html(classes='table table-striped', index=False)
+
+                    # Crear DataFrame para las funciones
+                    func_df = pd.DataFrame({'Función': [str(func) for func in spline_funcs]})
+                    func_df_to_html = func_df.to_html(classes='table table-striped', index=False)
+
+                    # Evaluar las funciones en un rango de x
+                    funciones_evaluadas = []
+                    for i, func in enumerate(spline_funcs):
+                        x_vals = np.linspace(X[i], X[i + 1], 100)
+                        y_vals = [float(func.evalf(subs={x: val})) for val in x_vals]
+                        funciones_evaluadas.append((x_vals, y_vals))
+
+                    fig = go.Figure()
+
+                    # Agregar puntos originales
+                    fig.add_trace(go.Scatter(x=X, y=Y, mode='markers', name='Puntos originales'))
+
+                    # Agregar las funciones por tramos
+                    for i, (x_vals, y_vals) in enumerate(funciones_evaluadas):
+                        fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f'Tramo {i+1}'))
+
+                    fig.update_layout(title='Spline Cuadrático por Tramos',
+                                      xaxis_title='X',
+                                      yaxis_title='Y')
+
+                    # Graficar las funciones por tramos
+                    plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
+
+                    context = {
+                        'df': coef_df_to_html,
+                        'df2': func_df_to_html,
+                        'nombre_metodo': 'Spline Cuadrático',
+                        'plot_html': plot_html
+                    }
+
+                    dataframe_to_txt(coef_df, 'Spline_Cuadratico_coef')
+                    dataframe_to_txt(func_df, 'Spline_Cuadratico_func')
+                    plot_to_png(fig, 'Spline_Cuadratico_graph')
+                    return render(request, 'one_method.html', context)
+                except Exception as e:
+                    context = {'error_message': f'Hubo un error con Spline Cuadrático en: {str(e)}'}
+                    return render(request, 'error.html', context)                
+
             elif metodo_interpolacion=="splinecu":
                 x=xi
                 y=fi
