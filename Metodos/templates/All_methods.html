@@ -6,7 +6,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width   , initial-scale=1.0">
     <title>Metodos Numericos</title>
     <style>
        body {
@@ -20,55 +20,55 @@
 
 .sidebar {
     height: 100%;
-    width: 220px;
+    width: 240px;
     position: fixed;
     top: 0;
     left: 0;
-    background-color: #343a40;
+    background-color: #222e3c;
     padding-top: 20px;
     display: flex;
     flex-direction: column;
-    align-items: center; /* Centrará horizontalmente los elementos */
-    box-shadow: 2px 0 5px white;
+    align-items: left;
+    overflow: hidden; /* Ensure no overflow beyond sidebar width */
 }
 
 .sidebar h2 {
-    color: #ffdd57; /* Cambia este color al que prefieras */
-    font-weight: 600;
+    color: #3877d3;
+    font-weight: 700;
     margin: 10px 0;
-    text-align: center;
+    text-align: left;
+    padding-left: 40px;
 }
 
 .sidebar a {
     padding: 15px 0px;
+    padding-left: 50px;
     text-decoration: none;
-    color: #fff;
+    color: #f5f5f5;
     display: block;
     transition: background-color 0.3s, color 0.3s;
-    width: 100%; /* Asegura que los enlaces ocupen todo el ancho del sidebar */
-    text-align: center; /* Centra el texto dentro de los enlaces */
+    text-align: left;
     font-weight: 500;
 }
 
 .sidebar a:hover {
-    background-color: #495057;
+    background-color: #2a4364;
     color: #fff;
-    width: 100%;
 }
 
 .content {
-    margin-left: 240px;
-    padding: 40px;
+    margin-left: 280px;
+    padding: 60px;
     background-color: #ffffff;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
     border-radius: 8px;
-    max-width: 800px;
+    max-width: 1500px;
     margin-top: 20px;
 }
 
 .form-container {
     margin-bottom: 20px;
-    padding: 20px;
+    padding: 40px;
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 8px;
@@ -78,7 +78,7 @@
 .form-container label {
     display: block;
     margin-bottom: 5px;
-    font-weight: 500;
+    font-weight: 600;
     color: #495057;
 }
 
@@ -91,7 +91,7 @@
     border: 1px solid #ced4da;
     border-radius: 4px;
     box-sizing: border-box;
-    font-size: 16px;
+    font-size: 18px;
     font-family: "Montserrat", sans-serif;
 }
 
@@ -101,7 +101,7 @@
 }
 
 .form-container button {
-    background-color: #343a40;
+    background-color: #222e3c;
     color: #fff;
     border: none;
     cursor: pointer;
@@ -115,7 +115,7 @@
 }
 
 .form-container button:hover {
-    background-color: #495057;
+    background-color: #3877d3;
 }
 
 .hidden {
@@ -415,9 +415,7 @@
                             </table>
                         </div>
                     </td>
-                    <td>
-                        <button type="submit">Evaluar</button>
-                    </td>
+                    <button class="button" type="submit">Evaluar</button>
                 </tr>
             </table>
         </form>
@@ -453,7 +451,7 @@
                     <td><input type="text" name="y[]" /></td>
                 </tr>
             </table>
-            <button type="button" onclick="addColumn()">Agregar columna</button>
+            <button type="button" onclick="addColumn()" >Agregar columna</button>
             <button type="button" onclick="removeColumn()">Eliminar columna</button>
             <br>
             <button type="submit">Evaluar</button>
