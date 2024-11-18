@@ -67,7 +67,9 @@ def MatJacobiSeid(x0, A, b, Tol, niter, met):
         s = x0
         n = c
         mensaje='Fracasó en '+str(niter)+' iteraciones'
+        respuesta['solucion']=True
         respuesta['mensaje']=mensaje
+
     return respuesta
 
 def radio_espectral(matriz):
@@ -114,6 +116,7 @@ def metodo_sor(A,x0,b,Tol,niter,w):
         s = x0
         n = c
         mensaje='Fracasó en '+str(niter)+' iteraciones'
+        respuesta['solucion']=True
         respuesta['mensaje']=mensaje
     print("intentemos ver si if solucion")
     

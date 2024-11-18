@@ -6,7 +6,7 @@ from sympy import *
 from django.utils.safestring import mark_safe
 import plotly.graph_objects as go
 from .metodos.iterativos import metodo_gauss_seidel,metodo_jacobi,metodo_sor
-from .utiles.saver import dataframe_to_txt,plot_to_png,text_to_txt
+from .utiles.saver import dataframe_to_txt,plot_to_png,text_to_txt, plot_to_svg
 from .utiles.plotter import plot_fx_puntos,fx_plot,spline_plot
 
 def home(request):
@@ -14,63 +14,91 @@ def home(request):
 
 def reglaFalsaView(request):
     context = {}
-    
+
     if request.method == 'POST':
-        try: 
+        try:
+            # Recoger datos del formulario
             fx = request.POST["funcion"]
-
             x0 = request.POST["a"]
-            X0 = float(x0)
-
             xi = request.POST["b"]
-            Xi = float(xi)
-
             tol = request.POST["tolerancia"]
-            Tol = float(tol)
-
             niter = request.POST["iteraciones"]
-            Niter = int(niter)
-
             tipo_error = request.POST.get('tipo_error')
-            
+
+            # Validar y convertir los valores ingresados
+            try:
+                X0 = float(x0)
+                Xi = float(xi)
+                Tol = float(tol)
+                Niter = int(niter)
+            except ValueError:
+                context['error_message'] = 'Uno de los valores ingresados no es un número válido.'
+                return render(request, 'error.html', context)
+
+            # Asegurarse de que el intervalo es correcto
+            if X0 >= Xi:
+                context['error_message'] = 'El valor de "a" debe ser menor que el valor de "b" para definir un intervalo válido.'
+                return render(request, 'error.html', context)
+
+            # Calcular usando el metodo de regla falsa
             datos = reglaFalsa(X0, Xi, Niter, Tol, fx, tipo_error)
 
+            # Manejo de errores desde la función reglaFalsa
             if "errors" in datos and datos["errors"]:
-                context['error_message'] = f'Hubo un error en el metodo Regla Falsa en: {datos["errors"]}'
+                context['error_message'] = f'Hubo un error en el método Regla Falsa en: {datos["errors"]}'
                 return render(request, 'error.html', context)
-            
+
+            # Si hay resultados, continuar con el procesamiento
             if "results" in datos:
                 df = pd.DataFrame(datos["results"], columns=datos["columns"])
-                
+
+                # Convertir la función ingresada en una expresión manejable por sympy
                 x = sp.symbols('x')
-                funcion_expr = sp.sympify(fx)
+                try:
+                    funcion_expr = sp.sympify(fx)
+                    fx_func = sp.lambdify(x, funcion_expr, 'numpy')
+                except Exception as e:
+                    context['error_message'] = f'Hubo un error al convertir la función ingresada: {str(e)}'
+                    return render(request, 'error.html', context)
 
-                xi_copy = X0
-                xs_copy = Xi
+                # Crear el intervalo para graficar la función
+                intervalo_x = np.arange(X0, Xi, 0.1)
+                if len(intervalo_x) == 0:
+                    context['error_message'] = 'El intervalo definido no tiene suficientes puntos para graficar la función.'
+                    return render(request, 'error.html', context)
 
-                intervalo_x = np.arange(xi_copy, xs_copy, 0.1)
-                fx_func = sp.lambdify(x, funcion_expr, 'numpy')
                 intervalo_y = fx_func(intervalo_x)
-                intervalo_x_completo = np.arange(xi_copy, xs_copy, 0.1)
+                intervalo_x_completo = np.arange(X0, Xi, 0.1)
                 intervalo_y_completo = fx_func(intervalo_x_completo)
 
+                # Crear la figura con plotly
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=intervalo_x_completo, y=intervalo_y_completo, mode='lines', name='f(x)'))
 
+                # Si hay una raíz, agregarla al gráfico
                 if datos.get("root") is not None:
-                    fig.add_trace(go.Scatter(x=[float(datos["root"])], y=[float(0)], mode='markers', name='Raíz hallada'))
+                    try:
+                        root_value = float(datos["root"])
+                        fig.add_trace(go.Scatter(x=[root_value], y=[0], mode='markers', name='Raíz hallada'))
+                    except (ValueError, TypeError) as e:
+                        context['error_message'] = f'Error al convertir la raíz a un valor flotante: {str(e)}'
+                        return render(request, 'error.html', context)
 
-                fig.update_layout(title=f'Función: {fx} en intervalo [{xi_copy}, {xs_copy}]',
-                                    xaxis_title='x',
-                                    yaxis_title='f(x)')
+                # Configurar el layout del gráfico
+                fig.update_layout(title=f'Función: {fx} en intervalo [{X0}, {Xi}]',
+                                  xaxis_title='x',
+                                  yaxis_title='f(x)')
 
+                # Convertir la figura a HTML y guardar los resultados
                 plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
-                dataframe_to_txt(df, f'Regla Falsa{fx}')
-                plot_to_png(fig,f'Regla Falsa {fx}')
-                
+                dataframe_to_txt(df, f'Regla Falsa')
+                plot_to_png(fig, f'Regla Falsa')
+                plot_to_svg(fig, f'Regla Falsa')
+
+                # Pasar los resultados al contexto
                 context = {'df': df.to_html(), 'plot_html': plot_html, 'mensaje': f'La solución es: {datos["root"]}'}
         except Exception as e:
-            context = {'error_message': f'Hubo un error en el metodo Regla Falsa en: {str(e)}'}
+            context = {'error_message': f'Hubo un error en el método Regla Falsa en: {str(e)}'}
             return render(request, 'error.html', context)
 
     return render(request, 'one_method.html', context)
@@ -84,85 +112,83 @@ def reglaFalsa(a, b, Niter, Tol, fx, tipo_error):
         'root': '0'
     }
 
-    #configuración inicial
+    # Configuración inicial
     datos = list()
     x = sp.Symbol('x')
     i = 1
     cond = Tol
-    error = 1.0000000
+    error = 1.0
 
     Fun = sympify(fx)
    
     xm = 0
     xm0 = 0
-    Fx_2 = 0
-    Fx_3 = 0
-    Fa = 0
-    Fb = 0
 
     try:
-        if Fun.subs(x, a)*Fun.subs(x, b) > 0:
-            output["errors"].append("La funcion no cambia de signo en el intervalo dado")
+        if Fun.subs(x, a) * Fun.subs(x, b) > 0:
+            output["errors"].append("La función no cambia de signo en el intervalo dado")
             return output
+
         while (error > cond) and (i < Niter):
-            if i == 1:
-                Fx_2 = Fun.subs(x, a)
-                Fx_2 = Fx_2.evalf()
-                Fa = Fx_2
+            Fa = Fun.evalf(subs={x: a})
+            Fb = Fun.evalf(subs={x: b})
 
-                Fx_2 = Fun.subs(x, b)
-                Fx_2 = Fx_2.evalf()
-                Fb = Fx_2
+            xm = (Fb * a - Fa * b) / (Fb - Fa)
+            Fx_3 = Fun.evalf(subs={x: xm})
 
-                xm = (Fb*a - Fa*b)/(Fb-Fa)
-                Fx_3 = Fun.subs(x, xm)
-                Fx_3 = Fx_3.evalf()
-                datos.append([i, '{:^15.7f}'.format(a), '{:^15.7f}'.format(xm), '{:^15.7f}'.format(b), '{:^15.7E}'.format(Fx_3)])
-            else:
+            # Verificar si los valores son reales antes de formatear
+            if not (Fa.is_real and Fb.is_real and xm.is_real and Fx_3.is_real):
+                output["errors"].append("Error en el cálculo: se encontraron valores complejos.")
+                return output
 
-                if (Fa*Fx_3 < 0):
-                    b = xm
-                else:
-                    a = xm
-
-                xm0 = xm
-                Fx_2 = Fun.subs(x, a) #Función evaluada en a
-                Fx_2 = Fx_2.evalf()
-                Fa = Fx_2
-
-                Fx_2 = Fun.subs(x, b) #Función evaluada en a
-                Fx_2 = Fx_2.evalf()
-                Fb = Fx_2
-
-                xm = (Fb*a - Fa*b)/(Fb-Fa) #Calcular intersección en la recta en el eje x
-
-                Fx_3 = Fun.subs(x, xm) #Función evaluada en xm (f(xm))
-                Fx_3 = Fx_3.evalf()
-
+            if i > 1:
                 if tipo_error == "absoluto":
-                    error = Abs(xm-xm0)
-                    er = sympify(error)
-                    error = er.evalf()
+                    error = abs(xm - xm0)
                 else:
-                    error = Abs(xm-xm0)/xm
-                    er = sympify(error)
-                    error = er.evalf()
+                    error = abs(xm - xm0) / abs(xm)
 
-                datos.append([i, '{:^15.7f}'.format(a), '{:^15.7f}'.format(xm), '{:^15.7f}'.format(b), '{:^15.7E}'.format(Fx_3), '{:^15.7E}'.format(error)])
+            if Fa * Fx_3 < 0:
+                b = xm
+            else:
+                a = xm
+
+            # Manejar el caso donde el valor es extremadamente pequeño para evitar problemas de formato
+            def safe_format(value):
+                if abs(value) < 1e-10:  # Si el valor es muy pequeño, se considera cero
+                    return '{:^15}'.format(0)
+                return '{:^15.7f}'.format(value)
+
+            # Manejar el caso donde el error sea cero o extremadamente pequeño
+            if i > 1 and abs(error) < 1e-10:
+                error_str = '{:^15}'.format(0)
+            elif i > 1:
+                error_str = '{:^15.7E}'.format(error)
+            else:
+                error_str = 'N/A'
+
+            # Agregar los resultados a la lista de datos
+            datos.append([
+                i,
+                safe_format(a),
+                safe_format(xm),
+                safe_format(b),
+                '{:^15.7E}'.format(Fx_3) if abs(Fx_3) >= 1e-10 else '{:^15}'.format(0),
+                error_str
+            ])
+            
+            xm0 = xm
             i += 1
+
     except BaseException as e:
         if str(e) == "can't convert complex to float":
-            output["errors"].append(
-                "Error in data: found complex in calculations")
+            output["errors"].append("Error en los datos: se encontró un número complejo en los cálculos")
         else:
-            output["errors"].append("Error in data: " + str(e))
-
+            output["errors"].append("Error en los datos: " + str(e))
         return output
 
     output["results"] = datos
     output["root"] = xm
     return output
-
 
 def puntoFijo(X0, Tol, Niter, fx, gx, tipo_error):
 
@@ -265,8 +291,9 @@ def puntoFijoView(request):
             
             plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
 
-            dataframe_to_txt(df, f'PuntoFijo {fx}')
-            plot_to_png(fig,f'PuntoFijo {fx}')
+            dataframe_to_txt(df, f'PuntoFijo')
+            plot_to_png(fig,f'PuntoFijo')
+            plot_to_svg(fig,f'PuntoFijo')
             
         
             if datos:
@@ -403,6 +430,7 @@ def biseccion(request):
             plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
             dataframe_to_txt(df,"biseccion")
             plot_to_png(fig,"biseccion")
+            plot_to_svg(fig,"biseccion")
             context = {'df': df.to_html(), 'plot_html': plot_html}
             mensaje=mark_safe(mensaje)
             context['mensaje']=mensaje
@@ -536,6 +564,7 @@ def secante(request):
             plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
             dataframe_to_txt(df,"secante")
             plot_to_png(fig,"secante")
+            plot_to_svg(fig,"secante")
             context = {'df': df.to_html(), 'plot_html': plot_html}
             mensaje=mark_safe(mensaje)
             context['mensaje']=mensaje
@@ -649,8 +678,9 @@ def newtonView(request):
 
             plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
 
-            dataframe_to_txt(df, f'Newton_txt {fx}')
-            plot_to_png(fig,f'Newton {fx}')
+            dataframe_to_txt(df, f'Newton_txt')
+            plot_to_png(fig,f'Newton')
+            plot_to_svg(fig,f'Newton')
 
             context = {'df': df.to_html(), 'plot_html': plot_html, 'mensaje': f'La solución es: {datos["root"]}'}
 
@@ -780,8 +810,9 @@ def raicesMultiplesView(request):
             
             plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
 
-            dataframe_to_txt(df, f'RaicesMultiples_txt {Fx}')
-            plot_to_png(fig,f'RaicesMultiples {Fx}')
+            dataframe_to_txt(df, f'RaicesMultiples_txt')
+            plot_to_png(fig,f'RaicesMultiples')
+            plot_to_svg(fig,f'RaicesMultiples')
 
             context = {'df': df.to_html(), 'plot_html': plot_html, 'mensaje': f'La solución es: {datos["root"]}'}
 
@@ -794,56 +825,65 @@ def raicesMultiplesView(request):
     return render(request, 'one_method.html')
     
 
-def iterativos(request):
+def iterativos(request): 
     if request.method == 'POST':
-        tamaño=request.POST['numero']
-        metodo=request.POST['metodo_iterativo']
-        tol=request.POST['tol']
-        niter=request.POST['niter']
-        if metodo=="sor":
-            w=request.POST['w']
+        tamaño = request.POST['numero']
+        metodo = request.POST['metodo_iterativo']
+        tol = request.POST['tol']
+        niter = request.POST['niter']
+        if metodo == "sor":
+            w = request.POST['w']
         try:
-            matriz=[]
-            tamaño=int(tamaño)
-            tol=float(tol)
-            niter=int(niter)
-            if metodo=="sor":
-                w=float(w)
-            i=0
+            matriz = []
+            tamaño = int(tamaño)
+            tol = float(tol)
+            niter = int(niter)
+            if metodo == "sor":
+                w = float(w)
+            
+            # Obtener los valores de la matriz
             for i in range(tamaño):
                 row = []
-                j=0
                 for j in range(tamaño):
                     val = request.POST.get(f'matrix_cell_{i}_{j}')
-                    row.append(int(val) if val else 0)
+                    row.append(float(val) if val else 0.0)  # Cambiado a float para permitir decimales
                 matriz.append(row)
-            vectorx=[]
+
+            # Obtener los valores del vector inicial x
+            vectorx = []
             for i in range(tamaño):
                 val = request.POST.get(f'vx_cell_{i}')
-                vectorx.append(int(val) if val else 0)
-            vectorb=[]
+                vectorx.append(float(val) if val else 0.0)  # Cambiado a float para permitir decimales
+
+            # Obtener los valores del vector b
+            vectorb = []
             for i in range(tamaño):
                 val = request.POST.get(f'vb_cell_{i}')
-                vectorb.append(int(val) if val else 0)
-            nmatriz=np.array(matriz)
+                vectorb.append(float(val) if val else 0.0)  # Cambiado a float para permitir decimales
+            
+            # Convertir a numpy arrays
+            nmatriz = np.array(matriz)
             nvectorx = np.array(vectorx).reshape(-1, 1)
             nvectorb = np.array(vectorb).reshape(-1, 1)
-            if metodo=="jacobi":
-                context=metodo_jacobi(nmatriz,nvectorx,nvectorb,tol,niter)
-            elif metodo=="gauss_seidel":
-                context=metodo_gauss_seidel(nmatriz,nvectorx,nvectorb,tol,niter)
-            elif metodo=="sor":
-                context=metodo_sor(nmatriz,nvectorx,nvectorb,tol,niter,w)
 
-            dataframe_to_txt(pd.DataFrame(nmatriz),metodo+"_matrizA")
-            dataframe_to_txt(pd.DataFrame(nvectorb),metodo+"_vectorb")
-            dataframe_to_txt(context['tabla'],metodo+"_tabla")
-            return render(request,'resultado_iterativo.html',context)
+            # Elegir el método iterativo
+            if metodo == "jacobi":
+                context = metodo_jacobi(nmatriz, nvectorx, nvectorb, tol, niter)
+            elif metodo == "gauss_seidel":
+                context = metodo_gauss_seidel(nmatriz, nvectorx, nvectorb, tol, niter)
+            elif metodo == "sor":
+                context = metodo_sor(nmatriz, nvectorx, nvectorb, tol, niter, w)
 
-        except:
-            context={'mensaje':'No se pudo realizar la operación'}
-            return render(request,'resultado_iterativo.html',context)
+            # Guardar los resultados en archivos de texto
+            dataframe_to_txt(pd.DataFrame(nmatriz), metodo + "_matrizA")
+            dataframe_to_txt(pd.DataFrame(nvectorb), metodo + "_vectorb")
+            dataframe_to_txt(context['tabla'], metodo + "_tabla")
 
+            return render(request, 'resultado_iterativo.html', context)
+
+        except Exception as e:
+            context = {'mensaje': f'No se pudo realizar la operación: {str(e)}'}
+            return render(request, 'resultado_iterativo.html', context)
 
 def interpolacion(request):
     if request.method == 'POST':
@@ -938,6 +978,7 @@ def interpolacion(request):
 
                     # Guardar la gráfica como imagen
                     plot_to_png(fig, f'Lagrange_img{polisimple}')
+                    plot_to_svg(fig, f'Lagrange_img{polisimple}')
 
                     # Convertir DataFrame a HTML
                     df_html = df_iteraciones.to_html(classes='table table-striped', index=False)
@@ -1023,6 +1064,7 @@ def interpolacion(request):
                     dataframe_to_txt(diff_table_df, 'Newton_diff_table')
                     dataframe_to_txt(newton_poly_df, 'Newton_poly')
                     plot_to_png(fig, 'Newton_DiffDiv_graph')
+                    plot_to_svg(fig, 'Newton_DiffDiv_graph')
                     return render(request, 'one_method.html', context)
                 except Exception as e:
                     context = {'error_message': f'Hubo un error con Newton Diferencias Divididas en: {str(e)}'}
@@ -1063,6 +1105,7 @@ def interpolacion(request):
                     plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
                     plot_to_png(fig,"vandermonde")
                     text_to_txt(pol,"vandermonde_pol")
+                    plot_to_svg(fig,"vandermonde")
                     
                     mensaje = "Se logro dar con una solucion"
                     context = {
@@ -1151,8 +1194,9 @@ def interpolacion(request):
                 dataframe_to_txt(coef_df, 'Spline_coef')
                 dataframe_to_txt(func_df, 'Spline_func')
                 plot_to_png(fig, f'Spline_Lineal_graph')
+                plot_to_svg(fig, f'Spline_Lineal_graph')
 
-            elif metodo_interpolacion == 'cuadratic_spline':
+            elif metodo_interpolacion == 'splinecua':
                 try:
                     xi = x_floats
                     fi = y_floats
@@ -1188,6 +1232,9 @@ def interpolacion(request):
                         A[row, 3 * i + 1] = -1
                         b[row] = 0
                         row += 1
+
+                    # Añadir una pequeña regularización para evitar singularidad
+                    A += np.eye(A.shape[0]) * 1e-10
 
                     # Resolver el sistema de ecuaciones
                     coeficientes = np.linalg.solve(A, b)
@@ -1226,8 +1273,8 @@ def interpolacion(request):
                         fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f'Tramo {i+1}'))
 
                     fig.update_layout(title='Spline Cuadrático por Tramos',
-                                      xaxis_title='X',
-                                      yaxis_title='Y')
+                                    xaxis_title='X',
+                                    yaxis_title='Y')
 
                     # Graficar las funciones por tramos
                     plot_html = fig.to_html(full_html=False, default_height=500, default_width=700)
@@ -1242,10 +1289,12 @@ def interpolacion(request):
                     dataframe_to_txt(coef_df, 'Spline_Cuadratico_coef')
                     dataframe_to_txt(func_df, 'Spline_Cuadratico_func')
                     plot_to_png(fig, 'Spline_Cuadratico_graph')
+                    plot_to_svg(fig, 'Spline_Cuadratico_graph')
                     return render(request, 'one_method.html', context)
                 except Exception as e:
                     context = {'error_message': f'Hubo un error con Spline Cuadrático en: {str(e)}'}
-                    return render(request, 'error.html', context)                
+                    return render(request, 'error.html', context)
+               
 
             elif metodo_interpolacion=="splinecu":
                 x=xi
@@ -1334,6 +1383,7 @@ def interpolacion(request):
                 dataframe_to_txt(coeficientes,"spline_cubico_coef")
                 dataframe_to_txt(tabla_df,"spline_cubico_funciones")
                 plot_to_png(fig,"spline_cubico_grafica")
+                plot_to_svg(fig,"spline_cubico_grafica")
 
 
         

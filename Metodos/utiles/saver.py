@@ -21,6 +21,7 @@ def plot_to_png(fig, filename):
         fig.write_image(f'resultados/{filename}.png')
     except Exception as e:
         print("An error occurred while saving the plot as PNG:", str(e))
+
 def text_to_txt(text,filename):
     if not os.path.exists('resultados'):
         os.makedirs('resultados')
@@ -29,3 +30,12 @@ def text_to_txt(text,filename):
             f.write(text)
     except Exception as e:
         print("An error occurred while saving the text as TXT:", str(e))
+
+def plot_to_svg(fig, filename):
+    if not os.path.exists('resultados'):
+        os.makedirs('resultados')
+    try:
+        fig.write_image(f'resultados/{filename}.svg', format='svg')
+    except Exception as e:
+        print("An error occurred while saving the plot as SVG:", str(e))
+
