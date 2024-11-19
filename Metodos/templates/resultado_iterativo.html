@@ -22,21 +22,23 @@
 <div class="content">
     <h1>{{nombre_metodo}}</h1>
     <br>
-    <h3 >{{ mensaje }}</h3>
+    <h3>{{ mensaje }}</h3>
     <br>
     {% if solucion %}
         <div class="radio-container">
             <!-- Aquí se mostrará el gráfico de Plotly -->
-            <h3 >Radio espectral: {{ radio_esp }}</h3>
+            <h3>Radio espectral: {{ radio_esp }}</h3>
             <br>
-            <h3 >Matriz T</h3>
+            {{ grafica_sistema_html | safe }}
+            <br>
+            <h3>Matriz T</h3>
             <br>
             <div class="t-container">
                 <!-- Aquí se mostrará la tabla generada -->
                 {{ T | safe }}
             </div>
             <br>
-            <h3 >Matriz C</h3>
+            <h3>Matriz C</h3>
             <br>
             <div class="C-container">
                 <!-- Aquí se mostrará la tabla generada -->
@@ -55,7 +57,8 @@
         </form>
     </div>
 
-<!-- Agrega aquí los scripts necesarios, como el de Plotly si es necesario -->
+    <!-- Agrega aquí los scripts necesarios, como el de Plotly si es necesario -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
 </body>
 </html>

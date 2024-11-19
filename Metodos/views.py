@@ -823,7 +823,6 @@ def raicesMultiplesView(request):
                 return render(request, 'error.html', context)
         
     return render(request, 'one_method.html')
-    
 
 def iterativos(request): 
     if request.method == 'POST':
@@ -846,25 +845,72 @@ def iterativos(request):
                 row = []
                 for j in range(tamaño):
                     val = request.POST.get(f'matrix_cell_{i}_{j}')
-                    row.append(float(val) if val else 0.0)  # Cambiado a float para permitir decimales
+                    if not val:
+                        raise ValueError("La matriz contiene valores vacíos. Por favor, ingrese todos los valores de la matriz.")
+                    row.append(float(val))  # Cambiado a float para permitir decimales
                 matriz.append(row)
 
             # Obtener los valores del vector inicial x
             vectorx = []
             for i in range(tamaño):
                 val = request.POST.get(f'vx_cell_{i}')
-                vectorx.append(float(val) if val else 0.0)  # Cambiado a float para permitir decimales
+                if not val:
+                    raise ValueError("El vector inicial x contiene valores vacíos. Por favor, ingrese todos los valores del vector.")
+                vectorx.append(float(val))  # Cambiado a float para permitir decimales
 
             # Obtener los valores del vector b
             vectorb = []
             for i in range(tamaño):
                 val = request.POST.get(f'vb_cell_{i}')
-                vectorb.append(float(val) if val else 0.0)  # Cambiado a float para permitir decimales
+                if not val:
+                    raise ValueError("El vector b contiene valores vacíos. Por favor, ingrese todos los valores del vector.")
+                vectorb.append(float(val))  # Cambiado a float para permitir decimales
             
             # Convertir a numpy arrays
             nmatriz = np.array(matriz)
             nvectorx = np.array(vectorx).reshape(-1, 1)
             nvectorb = np.array(vectorb).reshape(-1, 1)
+
+            # Graficar el sistema de ecuaciones si es una matriz 2x2
+            if tamaño == 2:
+                a1, b1 = nmatriz[0]
+                c1 = nvectorb[0][0]
+                a2, b2 = nmatriz[1]
+                c2 = nvectorb[1][0]
+
+                # Definir las funciones de las rectas
+                def f1(x):
+                    return (c1 - a1 * x) / b1 if b1 != 0 else None
+
+                def f2(x):
+                    return (c2 - a2 * x) / b2 if b2 != 0 else None
+
+                # Crear un rango de valores para x
+                x_vals = np.linspace(-10, 10, 400)
+                
+                # Graficar las rectas usando Plotly
+                fig = go.Figure()
+                if b1 != 0:
+                    fig.add_trace(go.Scatter(x=x_vals, y=f1(x_vals), mode='lines', name=f'{a1}x + {b1}y = {c1}'))
+                if b2 != 0:
+                    fig.add_trace(go.Scatter(x=x_vals, y=f2(x_vals), mode='lines', name=f'{a2}x + {b2}y = {c2}'))
+                
+                fig.update_layout(
+                    title='Sistema de Ecuaciones Lineales',
+                    xaxis_title='x',
+                    yaxis_title='y',
+                    showlegend=True,
+                    template='plotly_white'
+                )
+
+                # Guardar la gráfica en PNG y SVG
+                plot_to_png(fig, 'sistema_ecuaciones')
+                plot_to_svg(fig, 'sistema_ecuaciones')
+
+                # Convertir la gráfica a HTML
+                grafica_html = fig.to_html(full_html=False)
+            else:
+                grafica_html = None
 
             # Elegir el método iterativo
             if metodo == "jacobi":
@@ -879,11 +925,17 @@ def iterativos(request):
             dataframe_to_txt(pd.DataFrame(nvectorb), metodo + "_vectorb")
             dataframe_to_txt(context['tabla'], metodo + "_tabla")
 
+            # Agregar la imagen al contexto si se generó
+            if tamaño == 2:
+                context['grafica_sistema_html'] = grafica_html
+
             return render(request, 'resultado_iterativo.html', context)
 
         except Exception as e:
             context = {'mensaje': f'No se pudo realizar la operación: {str(e)}'}
             return render(request, 'resultado_iterativo.html', context)
+
+
 
 def interpolacion(request):
     if request.method == 'POST':
